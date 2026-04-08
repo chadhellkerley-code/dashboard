@@ -112,6 +112,13 @@ const parseSheetDate = (value) => {
 
   if (typeof value === "string") {
     const trimmed = value.trim();
+    const isoDate = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T].*)?$/);
+    if (isoDate) {
+      const [, year, month, day] = isoDate;
+      const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
     const gvizDate = trimmed.match(/^Date\((.+)\)$/);
     if (gvizDate) {
       const [year, month = "0", day = "1"] = gvizDate[1].split(",").map((part) => Number(part.trim()));
@@ -195,7 +202,7 @@ const parseSheetPayload = (text) => {
     headers.map((_, index) => {
       const cell = row.c?.[index];
       if (!cell) return "";
-      return cell.f ?? cell.v ?? "";
+      return cell.v ?? cell.f ?? "";
     })
   );
 
