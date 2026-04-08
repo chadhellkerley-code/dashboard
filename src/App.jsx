@@ -487,6 +487,8 @@ function PaginaPrincipal({ datos, cfg, leadsData }) {
   const [expandido, setExpandido] = useState(null);
   const hasSalesData = datos.length > 0;
   const hasAnyData = hasSalesData || leadsData.length > 0;
+  const currentMonthIdx = new Date().getMonth();
+  const currentMonthLabel = MONTHS[currentMonthIdx];
 
   const filtrados = datos.filter(r => {
     if (filtros.closer && r.closer !== filtros.closer) return false;
@@ -494,15 +496,17 @@ function PaginaPrincipal({ datos, cfg, leadsData }) {
     if (filtros.prospecto && !r.prospecto.toLowerCase().includes(filtros.prospecto.toLowerCase())) return false;
     return true;
   });
+  const filtradosMesActual = filtrados.filter((r) => r.mesIdx === currentMonthIdx);
 
   const usandoLeadsSheet = leadsData.length > 0 && !filtros.closer && !filtros.setter && !filtros.prospecto;
-  const totalLeads = usandoLeadsSheet ? leadsData.length : filtrados.length;
-  const showRate = filtrados.length ? (filtrados.filter(r => r.show).length / filtrados.length) * 100 : 0;
-  const pitched = filtrados.filter(r => r.pitched && r.show);
+  const leadsMesActual = leadsData.filter((lead) => lead.mesIdx === currentMonthIdx);
+  const totalLeads = usandoLeadsSheet ? leadsMesActual.length : filtradosMesActual.length;
+  const showRate = filtradosMesActual.length ? (filtradosMesActual.filter(r => r.show).length / filtradosMesActual.length) * 100 : 0;
+  const pitched = filtradosMesActual.filter(r => r.pitched && r.show);
   const closeRate = pitched.length ? (pitched.filter(r => r.closed).length / pitched.length) * 100 : 0;
-  const revTotal = filtrados.reduce((s, r) => s + r.rev, 0);
-  const cashTotal = filtrados.reduce((s, r) => s + r.cash, 0);
-  const llamadasDue = filtrados.length;
+  const revTotal = filtradosMesActual.reduce((s, r) => s + r.rev, 0);
+  const cashTotal = filtradosMesActual.reduce((s, r) => s + r.cash, 0);
+  const llamadasDue = filtradosMesActual.length;
 
   // Leads por mes
   const leadsPorMes = MONTHS.map((mes, mesIdx) => ({
@@ -525,12 +529,12 @@ function PaginaPrincipal({ datos, cfg, leadsData }) {
     <div className="fade">
       {/* KPIs */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 14, marginBottom: 24 }}>
-        <KpiCard label="Total Leads" value={totalLeads} sub="registrados" />
-        <KpiCard label="Llamadas Programadas" value={llamadasDue} sub="en período" />
-        <KpiCard label="Tasa de Show" value={Math.round(showRate)} suffix="%" sub="se presentaron" />
-        <KpiCard label="Tasa de Cierre" value={Math.round(closeRate)} suffix="%" sub="de los que se presentaron" />
-        <KpiCard label="Ingresos Generados" value={revTotal} prefix={cfg.moneda === "MXN" ? "$" : "$"} sub={cfg.moneda} />
-        <KpiCard label="Efectivo Cobrado" value={cashTotal} prefix="$" sub={`${Math.round(cashTotal / (revTotal || 1) * 100)}% cobrado`} />
+        <KpiCard label="Total Leads" value={totalLeads} sub={`${currentMonthLabel} actual`} />
+        <KpiCard label="Llamadas Programadas" value={llamadasDue} sub={`${currentMonthLabel} actual`} />
+        <KpiCard label="Tasa de Show" value={Math.round(showRate)} suffix="%" sub={`${currentMonthLabel} actual`} />
+        <KpiCard label="Tasa de Cierre" value={Math.round(closeRate)} suffix="%" sub={`${currentMonthLabel} actual`} />
+        <KpiCard label="Ingresos del Mes" value={revTotal} prefix={cfg.moneda === "MXN" ? "$" : "$"} sub={currentMonthLabel} />
+        <KpiCard label="Cobrado del Mes" value={cashTotal} prefix="$" sub={`${Math.round(cashTotal / (revTotal || 1) * 100)}% cobrado`} />
       </div>
 
       {/* Gráfica leads */}
@@ -733,6 +737,8 @@ function PaginaDiagnostico({ datos, cfg }) {
 function PaginaAnalytics({ datos, cfg }) {
   const [tab, setTab] = useState(0);
   const meses = MONTHS;
+  const currentMonthIdx = new Date().getMonth();
+  const currentMonthLabel = MONTHS[currentMonthIdx];
 
   // Tab 1: Equipo
   const closers = [...new Set(datos.map(r => r.closer))];
@@ -766,7 +772,9 @@ function PaginaAnalytics({ datos, cfg }) {
 
   // Tab 2: Metas
   const revMes = meses.map(m => ({ mes: m, rev: datos.filter(r => r.mes === m).reduce((s, r) => s + r.rev, 0) }));
-  const totalRev = datos.reduce((s, r) => s + r.rev, 0);
+  const currentMonthRows = datos.filter((r) => r.mesIdx === currentMonthIdx);
+  const totalRev = currentMonthRows.reduce((s, r) => s + r.rev, 0);
+  const totalCash = currentMonthRows.reduce((s, r) => s + r.cash, 0);
   const progreso = Math.min((totalRev / cfg.metaMensual) * 100, 100);
   const cashPorMes = meses.map(m => ({ mes: m, pct: Math.round((datos.filter(r => r.mes === m).reduce((s, r) => s + r.cash, 0) / (datos.filter(r => r.mes === m).reduce((s, r) => s + r.rev, 0) || 1)) * 100) }));
 
@@ -896,7 +904,7 @@ function PaginaAnalytics({ datos, cfg }) {
         <div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
             <div className="glass" style={{ padding: "24px" }}>
-              <div className="label-sm">Meta Mensual</div>
+              <div className="label-sm">Meta Mensual · {currentMonthLabel}</div>
               <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 32, fontWeight: 800, marginBottom: 6 }}>{fmt(totalRev, "$")}</div>
               <div style={{ color: "var(--muted)", fontSize: 13, marginBottom: 14 }}>de {fmt(cfg.metaMensual, "$")} — {pct(progreso)} completado</div>
               <div className="progress-bg"><div className="progress-fill" style={{ width: `${progreso}%` }} /></div>
@@ -905,13 +913,13 @@ function PaginaAnalytics({ datos, cfg }) {
               </div>
             </div>
             <div className="glass" style={{ padding: "24px" }}>
-              <div className="label-sm">Pronóstico</div>
+              <div className="label-sm">Pronóstico · {currentMonthLabel}</div>
               <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 26, fontWeight: 800, color: totalRev >= cfg.metaMensual ? "#81c784" : "#ef9a9a", marginBottom: 6 }}>
                 {totalRev >= cfg.metaMensual ? "✅ En camino" : "⚠️ Por debajo"}
               </div>
               <div style={{ fontSize: 14, color: "var(--muted)", lineHeight: 1.7 }}>
-                Ritmo actual: <strong style={{ color: "var(--text)" }}>{fmt(Math.round(totalRev / 6), "$")}</strong>/mes<br />
-                Proyección anual: <strong style={{ color: "var(--text)" }}>{fmt(Math.round(totalRev / 6 * 12), "$")}</strong>
+                Ingreso del mes: <strong style={{ color: "var(--text)" }}>{fmt(totalRev, "$")}</strong><br />
+                Cobrado del mes: <strong style={{ color: "var(--text)" }}>{fmt(totalCash, "$")}</strong>
               </div>
             </div>
           </div>
