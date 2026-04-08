@@ -179,10 +179,17 @@ const parseSheetPayload = (text) => {
   const end = text.lastIndexOf("}");
   if (start === -1 || end === -1) throw new Error("La respuesta de Google Sheets no tuvo el formato esperado.");
 
-  const safeJson = text
-    .slice(start, end + 1)
-    .replace(/Date\(([^)]+)\)/g, '"Date($1)"');
-  const payload = JSON.parse(safeJson);
+  let payload;
+  try {
+    payload = Function(`"use strict"; return (${text.slice(start, end + 1)});`)();
+  } catch {
+    throw new Error("No pude interpretar la respuesta de Google Sheets.");
+  }
+
+  if (!payload?.table?.cols || !payload?.table?.rows) {
+    throw new Error("Google Sheets devolvió una estructura inesperada.");
+  }
+
   const headers = payload.table.cols.map((col, index) => col.label || `col_${index + 1}`);
   const rows = payload.table.rows.map((row) =>
     headers.map((_, index) => {
