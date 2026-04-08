@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, ReferenceLine } from "recharts";
 
 const STORAGE_KEY = "sales-dashboard-config";
+const AUTO_REFRESH_MS = 60000;
 const MONTHS = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
 const DEFAULT_CFG = {
   open: true,
@@ -1022,6 +1023,7 @@ export default function App() {
   const [cfg, setCfg] = useState(getInitialConfig);
   const [datos, setDatos] = useState(EMPTY_DATA);
   const [leadsData, setLeadsData] = useState([]);
+  const [refreshTick, setRefreshTick] = useState(0);
   const [syncState, setSyncState] = useState({
     status: "idle",
     message: "Pega una o dos URLs públicas de Google Sheets y el dashboard mostrará solo datos reales.",
@@ -1030,6 +1032,17 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
   }, [cfg]);
+
+  useEffect(() => {
+    const hasSheets = cfg.sheetRespuestas.trim() || cfg.sheetLeads.trim();
+    if (!hasSheets) return undefined;
+
+    const intervalId = window.setInterval(() => {
+      setRefreshTick((tick) => tick + 1);
+    }, AUTO_REFRESH_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [cfg.sheetRespuestas, cfg.sheetLeads]);
 
   useEffect(() => {
     const respuestasUrl = cfg.sheetRespuestas.trim();
@@ -1076,12 +1089,12 @@ export default function App() {
         setDatos(ventas);
         setLeadsData(leads);
         const message = respuestasUrl && leadsUrl
-          ? `Hojas conectadas. ${ventas.length} registros de ventas y ${leads.length} leads cargados.`
+          ? `Hojas conectadas. ${ventas.length} registros de ventas y ${leads.length} leads cargados. Auto-refresh cada ${AUTO_REFRESH_MS / 1000}s.`
           : respuestasUrl
             ? ventas.length
-              ? `Hoja de respuestas conectada. ${ventas.length} registros de ventas cargados.`
-              : "Hoja de respuestas conectada, pero todavía no tiene filas utilizables."
-            : `Hoja de leads conectada. ${leads.length} leads cargados. Agrega la hoja de respuestas para ver ventas, cierres e ingresos.`;
+              ? `Hoja de respuestas conectada. ${ventas.length} registros de ventas cargados. Auto-refresh cada ${AUTO_REFRESH_MS / 1000}s.`
+              : `Hoja de respuestas conectada, pero todavía no tiene filas utilizables. Auto-refresh cada ${AUTO_REFRESH_MS / 1000}s.`
+            : `Hoja de leads conectada. ${leads.length} leads cargados. Agrega la hoja de respuestas para ver ventas, cierres e ingresos. Auto-refresh cada ${AUTO_REFRESH_MS / 1000}s.`;
 
         setSyncState({
           status: "success",
@@ -1103,7 +1116,7 @@ export default function App() {
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [cfg.sheetRespuestas, cfg.sheetLeads]);
+  }, [cfg.sheetRespuestas, cfg.sheetLeads, refreshTick]);
 
   const handleSheetFieldChange = (field, value) => {
     setCfg((prev) => ({ ...prev, [field]: value }));
