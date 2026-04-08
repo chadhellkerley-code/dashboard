@@ -16,37 +16,7 @@ const DEFAULT_CFG = {
   sheetLeads: "",
 };
 
-// ─── DATOS DE EJEMPLO ───────────────────────────────────────────────
-const generarDatos = (cfg) => {
-  const closers = cfg.closers.length ? cfg.closers : ["Carlos", "Sofía", "Miguel"];
-  const setters = cfg.setters.length ? cfg.setters : ["Ana", "Luis", "Paola"];
-  const fuentes = cfg.fuentes.length ? cfg.fuentes : ["Instagram", "YouTube", "TikTok", "Referidos"];
-  const rows = [];
-  for (let m = 0; m < 6; m++) {
-    for (let w = 0; w < 4; w++) {
-      const nLeads = 6 + Math.floor(Math.random() * 6);
-      for (let i = 0; i < nLeads; i++) {
-        const show = Math.random() > 0.2;
-        const pitched = Math.random() > 0.15;
-        const closed = show && pitched && Math.random() > 0.55;
-        const rev = closed ? 800 + Math.floor(Math.random() * 2400) : 0;
-        rows.push({
-          mes: MONTHS[m], semana: w + 1, mesIdx: m,
-          closer: closers[Math.floor(Math.random() * closers.length)],
-          setter: setters[Math.floor(Math.random() * setters.length)],
-          prospecto: `Prospecto ${rows.length + 1}`,
-          fuente: fuentes[Math.floor(Math.random() * fuentes.length)],
-          show, pitched, closed,
-          rev, cash: closed ? Math.floor(rev * (0.5 + Math.random() * 0.5)) : 0,
-          notas: closed ? "Cerró sin objeciones. Muy interesado desde el inicio." :
-            !show ? "No se presentó. Requiere seguimiento." :
-            ["Objeción de precio. Necesita consultarlo.", "Decisión en pareja. Follow-up pendiente.", "Interesado pero fuera de presupuesto."][Math.floor(Math.random()*3)],
-        });
-      }
-    }
-  }
-  return rows;
-};
+const EMPTY_DATA = [];
 
 // ─── ESTILOS ────────────────────────────────────────────────────────
 const S = `
@@ -332,6 +302,15 @@ function useCountUp(target, duration = 900) {
   return val;
 }
 
+function EmptyState({ title, description }) {
+  return (
+    <div className="glass fade" style={{ padding: "28px 30px", textAlign: "center" }}>
+      <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 10 }}>{title}</div>
+      <div style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.7 }}>{description}</div>
+    </div>
+  );
+}
+
 // ─── CONFIG PANEL ───────────────────────────────────────────────────
 function ConfigPanel({ cfg, setCfg, onApply, onSheetFieldChange, syncState }) {
   const [local, setLocal] = useState(cfg);
@@ -453,7 +432,7 @@ function ConfigPanel({ cfg, setCfg, onApply, onSheetFieldChange, syncState }) {
             {local[field].map(v => (
               <span key={v} className="tag">{v}<button onClick={() => removeTag(field, v)}>×</button></span>
             ))}
-            {local[field].length === 0 && <span style={{ fontSize: 12, color: "var(--muted)" }}>Sin agregar aún — se usarán datos de ejemplo</span>}
+            {local[field].length === 0 && <span style={{ fontSize: 12, color: "var(--muted)" }}>Sin agregar aún</span>}
           </div>
         </div>
       ))}
@@ -500,6 +479,8 @@ const CustomTooltip = ({ active, payload, label, prefix = "$" }) => {
 function PaginaPrincipal({ datos, cfg, leadsData }) {
   const [filtros, setFiltros] = useState({ closer: "", setter: "", prospecto: "", desde: "", hasta: "" });
   const [expandido, setExpandido] = useState(null);
+  const hasSalesData = datos.length > 0;
+  const hasAnyData = hasSalesData || leadsData.length > 0;
 
   const filtrados = datos.filter(r => {
     if (filtros.closer && r.closer !== filtros.closer) return false;
@@ -598,43 +579,51 @@ function PaginaPrincipal({ datos, cfg, leadsData }) {
           <div style={{ fontWeight: 600, fontSize: 15 }}>Registros ({filtrados.length})</div>
         </div>
         <div style={{ overflowX: "auto", maxHeight: 420, overflowY: "auto" }}>
-          <table className="tbl">
-            <thead>
-              <tr>
-                <th>Prospecto</th><th>Closer</th><th>Setter</th><th>Fuente</th><th>Estado</th><th>Ingresos</th><th>Cobrado</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.slice(0, 50).map((r, i) => {
-                const ins = getInsight(r);
-                return (
-                  <>
-                    <tr key={i} style={{ cursor: "pointer" }} onClick={() => setExpandido(expandido === i ? null : i)}>
-                      <td style={{ fontWeight: 500 }}>{r.prospecto}</td>
-                      <td>{r.closer}</td>
-                      <td>{r.setter}</td>
-                      <td style={{ color: "var(--muted)", fontSize: 13 }}>{r.fuente}</td>
-                      <td><span className={`badge ${ins.badge}`}>{ins.estado}</span></td>
-                      <td style={{ fontWeight: 600, color: r.rev > 0 ? "#81c784" : "var(--muted)" }}>{r.rev > 0 ? fmt(r.rev, "$") : "—"}</td>
-                      <td style={{ color: "var(--muted)", fontSize: 13 }}>{r.cash > 0 ? fmt(r.cash, "$") : "—"}</td>
-                      <td style={{ color: "var(--muted)", fontSize: 18 }}>{expandido === i ? "▲" : "▼"}</td>
-                    </tr>
-                    {expandido === i && (
-                      <tr key={`exp-${i}`}>
-                        <td colSpan={8} style={{ padding: "14px 20px", background: "rgba(229,57,53,0.04)", borderLeft: "3px solid var(--red)" }}>
-                          <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 10 }}>🤖 <strong>Insight de llamada:</strong> {ins.resumen}</div>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                            {ins.tags.map(t => <span key={t} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 999, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--muted)" }}>{t}</span>)}
-                          </div>
-                          <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>📝 {r.notas}</div>
-                        </td>
+          {filtrados.length === 0 ? (
+            <div style={{ padding: "28px 22px", color: "var(--muted)", fontSize: 14, lineHeight: 1.7 }}>
+              {hasAnyData
+                ? "Todavía no hay registros de ventas reales que coincidan con los filtros actuales."
+                : "Conecta una hoja de respuestas o una hoja de leads para empezar a ver datos reales."}
+            </div>
+          ) : (
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Prospecto</th><th>Closer</th><th>Setter</th><th>Fuente</th><th>Estado</th><th>Ingresos</th><th>Cobrado</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtrados.slice(0, 50).map((r, i) => {
+                  const ins = getInsight(r);
+                  return (
+                    <>
+                      <tr key={i} style={{ cursor: "pointer" }} onClick={() => setExpandido(expandido === i ? null : i)}>
+                        <td style={{ fontWeight: 500 }}>{r.prospecto}</td>
+                        <td>{r.closer}</td>
+                        <td>{r.setter}</td>
+                        <td style={{ color: "var(--muted)", fontSize: 13 }}>{r.fuente}</td>
+                        <td><span className={`badge ${ins.badge}`}>{ins.estado}</span></td>
+                        <td style={{ fontWeight: 600, color: r.rev > 0 ? "#81c784" : "var(--muted)" }}>{r.rev > 0 ? fmt(r.rev, "$") : "—"}</td>
+                        <td style={{ color: "var(--muted)", fontSize: 13 }}>{r.cash > 0 ? fmt(r.cash, "$") : "—"}</td>
+                        <td style={{ color: "var(--muted)", fontSize: 18 }}>{expandido === i ? "▲" : "▼"}</td>
                       </tr>
-                    )}
-                  </>
-                );
-              })}
-            </tbody>
-          </table>
+                      {expandido === i && (
+                        <tr key={`exp-${i}`}>
+                          <td colSpan={8} style={{ padding: "14px 20px", background: "rgba(229,57,53,0.04)", borderLeft: "3px solid var(--red)" }}>
+                            <div style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 10 }}>🤖 <strong>Insight de llamada:</strong> {ins.resumen}</div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                              {ins.tags.map(t => <span key={t} style={{ fontSize: 12, padding: "3px 10px", borderRadius: 999, background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "var(--muted)" }}>{t}</span>)}
+                            </div>
+                            <div style={{ fontSize: 12, color: "var(--muted)", fontStyle: "italic" }}>📝 {r.notas}</div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>
@@ -643,6 +632,15 @@ function PaginaPrincipal({ datos, cfg, leadsData }) {
 
 // ─── PÁGINA 2: DIAGNÓSTICO ──────────────────────────────────────────
 function PaginaDiagnostico({ datos, cfg }) {
+  if (!datos.length) {
+    return (
+      <EmptyState
+        title="Sin datos de ventas"
+        description="Conecta la hoja de respuestas de Google Sheets para ver diagnóstico semanal, ingresos y cuellos de botella reales."
+      />
+    );
+  }
+
   const semanas = [];
   for (let m = 0; m < MONTHS.length; m++) {
     for (let w = 1; w <= 4; w++) {
@@ -728,6 +726,15 @@ function PaginaDiagnostico({ datos, cfg }) {
 function PaginaAnalytics({ datos, cfg }) {
   const [tab, setTab] = useState(0);
   const meses = MONTHS;
+
+  if (!datos.length) {
+    return (
+      <EmptyState
+        title="Analytics vacíos"
+        description="Todavía no hay registros de ventas reales para calcular scorecards, ingresos y patrones."
+      />
+    );
+  }
 
   // Tab 1: Equipo
   const closers = [...new Set(datos.map(r => r.closer))];
@@ -997,11 +1004,11 @@ function PaginaAnalytics({ datos, cfg }) {
 export default function App() {
   const [pagina, setPagina] = useState("principal");
   const [cfg, setCfg] = useState(getInitialConfig);
-  const [datos, setDatos] = useState(() => generarDatos(getInitialConfig()));
+  const [datos, setDatos] = useState(EMPTY_DATA);
   const [leadsData, setLeadsData] = useState([]);
   const [syncState, setSyncState] = useState({
     status: "idle",
-    message: "Pega una URL pública de Google Sheets y el dashboard intentará leerla automáticamente.",
+    message: "Pega una o dos URLs públicas de Google Sheets y el dashboard mostrará solo datos reales.",
   });
 
   useEffect(() => {
@@ -1012,17 +1019,19 @@ export default function App() {
     const respuestasUrl = cfg.sheetRespuestas.trim();
     const leadsUrl = cfg.sheetLeads.trim();
 
-    if (!respuestasUrl) {
-      setDatos(generarDatos(cfg));
+    if (!respuestasUrl && !leadsUrl) {
+      setDatos(EMPTY_DATA);
       setLeadsData([]);
       setSyncState({
         status: "idle",
-        message: "Sin hoja conectada. Se están usando datos de ejemplo.",
+        message: "Sin hojas conectadas. El dashboard queda vacío hasta que cargues datos reales.",
       });
       return;
     }
 
-    if (!extractSheetInfo(respuestasUrl) || (leadsUrl && !extractSheetInfo(leadsUrl))) {
+    if ((respuestasUrl && !extractSheetInfo(respuestasUrl)) || (leadsUrl && !extractSheetInfo(leadsUrl))) {
+      setDatos(EMPTY_DATA);
+      setLeadsData([]);
       setSyncState({
         status: "idle",
         message: "Pega una URL completa de Google Sheets para activar la lectura automática.",
@@ -1039,28 +1048,34 @@ export default function App() {
 
       try {
         const [respuestasSheet, leadsSheet] = await Promise.all([
-          loadGoogleSheet(respuestasUrl),
+          respuestasUrl ? loadGoogleSheet(respuestasUrl) : Promise.resolve(null),
           leadsUrl ? loadGoogleSheet(leadsUrl) : Promise.resolve(null),
         ]);
 
         if (cancelled) return;
 
-        const ventas = normalizeSalesRows(respuestasSheet);
+        const ventas = respuestasSheet ? normalizeSalesRows(respuestasSheet) : [];
         const leads = leadsSheet ? normalizeLeadRows(leadsSheet) : [];
-
-        if (!ventas.length) {
-          throw new Error("No encontré filas utilizables en la hoja de respuestas.");
-        }
 
         setDatos(ventas);
         setLeadsData(leads);
+        const message = respuestasUrl && leadsUrl
+          ? `Hojas conectadas. ${ventas.length} registros de ventas y ${leads.length} leads cargados.`
+          : respuestasUrl
+            ? ventas.length
+              ? `Hoja de respuestas conectada. ${ventas.length} registros de ventas cargados.`
+              : "Hoja de respuestas conectada, pero todavía no tiene filas utilizables."
+            : `Hoja de leads conectada. ${leads.length} leads cargados. Agrega la hoja de respuestas para ver ventas, cierres e ingresos.`;
+
         setSyncState({
           status: "success",
-          message: `Hojas conectadas. ${ventas.length} registros de ventas${leadsUrl ? ` y ${leads.length} leads` : ""} cargados automáticamente.`,
+          message,
         });
       } catch (error) {
         if (cancelled) return;
 
+        setDatos(EMPTY_DATA);
+        setLeadsData([]);
         setSyncState({
           status: "error",
           message: `${error.message} Verifica que ambas hojas sean públicas o estén publicadas en la web.`,
@@ -1078,12 +1093,7 @@ export default function App() {
     setCfg((prev) => ({ ...prev, [field]: value }));
   };
 
-  const aplicarConfig = (c) => {
-    if (!c.sheetRespuestas.trim()) {
-      setDatos(generarDatos(c));
-      setLeadsData([]);
-    }
-  };
+  const aplicarConfig = () => {};
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--bg)" }}>
@@ -1136,7 +1146,7 @@ export default function App() {
 
         {cfg.open && (
           <div style={{ textAlign: "center", padding: "40px 0", color: "var(--muted)", fontSize: 14 }}>
-            👆 Completa la configuración arriba y haz clic en <strong style={{ color: "var(--text)" }}>Aplicar configuración</strong> para ver tu dashboard
+            👆 Completa la configuración arriba y guarda las URLs para ver únicamente datos reales
           </div>
         )}
       </div>
