@@ -302,15 +302,6 @@ function useCountUp(target, duration = 900) {
   return val;
 }
 
-function EmptyState({ title, description }) {
-  return (
-    <div className="glass fade" style={{ padding: "28px 30px", textAlign: "center" }}>
-      <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 10 }}>{title}</div>
-      <div style={{ color: "var(--muted)", fontSize: 14, lineHeight: 1.7 }}>{description}</div>
-    </div>
-  );
-}
-
 // ─── CONFIG PANEL ───────────────────────────────────────────────────
 function ConfigPanel({ cfg, setCfg, onApply, onSheetFieldChange, syncState }) {
   const [local, setLocal] = useState(cfg);
@@ -632,15 +623,6 @@ function PaginaPrincipal({ datos, cfg, leadsData }) {
 
 // ─── PÁGINA 2: DIAGNÓSTICO ──────────────────────────────────────────
 function PaginaDiagnostico({ datos, cfg }) {
-  if (!datos.length) {
-    return (
-      <EmptyState
-        title="Sin datos de ventas"
-        description="Conecta la hoja de respuestas de Google Sheets para ver diagnóstico semanal, ingresos y cuellos de botella reales."
-      />
-    );
-  }
-
   const semanas = [];
   for (let m = 0; m < MONTHS.length; m++) {
     for (let w = 1; w <= 4; w++) {
@@ -653,10 +635,12 @@ function PaginaDiagnostico({ datos, cfg }) {
       const closeRate = pitched.length ? (closed / pitched.length) * 100 : 0;
       const avgDeal = closed ? rev / closed : 0;
       const issues = [];
-      if (rows.length < 8) issues.push({ tipo: "Leads", sev: rows.length < 4 ? "crítico" : "advertencia", txt: `Solo ${rows.length} llamadas (mín. 8)` });
-      if (closeRate < 45) issues.push({ tipo: "Cierre", sev: closeRate < 30 ? "crítico" : "advertencia", txt: `Tasa de cierre ${pct(closeRate)} (mín. 45%)` });
-      if (showRate < 80) issues.push({ tipo: "Show Rate", sev: showRate < 60 ? "crítico" : "advertencia", txt: `Show rate ${pct(showRate)} (mín. 80%)` });
-      if (avgDeal < 1000 && closed > 0) issues.push({ tipo: "Deal Size", sev: avgDeal < 500 ? "crítico" : "advertencia", txt: `Ticket promedio $${Math.round(avgDeal)} (mín. $1,000)` });
+      if (rows.length > 0) {
+        if (rows.length < 8) issues.push({ tipo: "Leads", sev: rows.length < 4 ? "crítico" : "advertencia", txt: `Solo ${rows.length} llamadas (mín. 8)` });
+        if (closeRate < 45) issues.push({ tipo: "Cierre", sev: closeRate < 30 ? "crítico" : "advertencia", txt: `Tasa de cierre ${pct(closeRate)} (mín. 45%)` });
+        if (showRate < 80) issues.push({ tipo: "Show Rate", sev: showRate < 60 ? "crítico" : "advertencia", txt: `Show rate ${pct(showRate)} (mín. 80%)` });
+        if (avgDeal < 1000 && closed > 0) issues.push({ tipo: "Deal Size", sev: avgDeal < 500 ? "crítico" : "advertencia", txt: `Ticket promedio $${Math.round(avgDeal)} (mín. $1,000)` });
+      }
       semanas.push({ label: `S${w} ${MONTHS[m]}`, rev, issues, rows: rows.length });
     }
   }
@@ -668,6 +652,11 @@ function PaginaDiagnostico({ datos, cfg }) {
       <div style={{ marginBottom: 24 }}>
         <div className="section-title">🔍 Diagnóstico Semanal de Ingresos</div>
         <p style={{ color: "var(--muted)", fontSize: 14 }}>Meta semanal: <strong style={{ color: "var(--text)" }}>{fmt(cfg.metaSemanal, "$")}</strong> — Se identifican los cuellos de botella por semana</p>
+        {!datos.length && (
+          <p style={{ color: "var(--muted)", fontSize: 13, marginTop: 8 }}>
+            Todavía no hay ventas registradas. La vista se mantiene visible con métricas en cero.
+          </p>
+        )}
       </div>
 
       {/* Gráfica */}
@@ -695,18 +684,21 @@ function PaginaDiagnostico({ datos, cfg }) {
           const gap = cfg.metaSemanal - s.rev;
           const ok = gap <= 0;
           const hasCrit = s.issues.some(x => x.sev === "crítico");
-          const borderCol = ok ? "rgba(76,175,80,0.3)" : hasCrit ? "rgba(229,57,53,0.3)" : "rgba(255,193,7,0.3)";
-          const bgCol = ok ? "rgba(76,175,80,0.06)" : hasCrit ? "rgba(229,57,53,0.06)" : "rgba(255,193,7,0.06)";
+          const hasRows = s.rows > 0;
+          const borderCol = !hasRows ? "rgba(255,255,255,0.12)" : ok ? "rgba(76,175,80,0.3)" : hasCrit ? "rgba(229,57,53,0.3)" : "rgba(255,193,7,0.3)";
+          const bgCol = !hasRows ? "rgba(255,255,255,0.03)" : ok ? "rgba(76,175,80,0.06)" : hasCrit ? "rgba(229,57,53,0.06)" : "rgba(255,193,7,0.06)";
           return (
             <div key={i} className="diag-card" style={{ borderColor: borderCol, background: bgCol }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{s.label}</div>
-                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: ok ? "rgba(76,175,80,0.15)" : "rgba(229,57,53,0.15)", color: ok ? "#81c784" : "#ef9a9a" }}>
-                  {ok ? "✓ Meta" : `−${fmt(gap, "$")}`}
+                <span style={{ fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 999, background: !hasRows ? "rgba(255,255,255,0.06)" : ok ? "rgba(76,175,80,0.15)" : "rgba(229,57,53,0.15)", color: !hasRows ? "var(--muted)" : ok ? "#81c784" : "#ef9a9a" }}>
+                  {!hasRows ? "Sin datos" : ok ? "✓ Meta" : `−${fmt(gap, "$")}`}
                 </span>
               </div>
               <div style={{ fontFamily: "'Syne',sans-serif", fontSize: 22, fontWeight: 800, marginBottom: 10 }}>{fmt(s.rev, "$")}</div>
-              {s.issues.length === 0
+              {!hasRows
+                ? <div style={{ fontSize: 12, color: "var(--muted)" }}>Sin registros cargados en esta semana</div>
+                : s.issues.length === 0
                 ? <div style={{ fontSize: 12, color: "#81c784" }}>✅ Sin problemas detectados</div>
                 : s.issues.map((iss, j) => (
                   <div key={j} style={{ fontSize: 12, color: iss.sev === "crítico" ? "#ef9a9a" : "#ffe082", marginBottom: 3 }}>
@@ -726,15 +718,6 @@ function PaginaDiagnostico({ datos, cfg }) {
 function PaginaAnalytics({ datos, cfg }) {
   const [tab, setTab] = useState(0);
   const meses = MONTHS;
-
-  if (!datos.length) {
-    return (
-      <EmptyState
-        title="Analytics vacíos"
-        description="Todavía no hay registros de ventas reales para calcular scorecards, ingresos y patrones."
-      />
-    );
-  }
 
   // Tab 1: Equipo
   const closers = [...new Set(datos.map(r => r.closer))];
@@ -763,6 +746,7 @@ function PaginaAnalytics({ datos, cfg }) {
   const fuenteMap = {};
   datos.forEach(r => { fuenteMap[r.fuente] = (fuenteMap[r.fuente] || 0) + 1; });
   const fuenteData = Object.entries(fuenteMap).map(([name, value]) => ({ name, value }));
+  const fuenteChartData = fuenteData.length ? fuenteData : [{ name: "Sin datos", value: 1 }];
   const COLORS = ["#e53935", "#ff6f00", "#ffc107", "#4caf50", "#2196f3", "#9c27b0"];
 
   // Tab 2: Metas
@@ -784,6 +768,7 @@ function PaginaAnalytics({ datos, cfg }) {
     { tag: "📵 No show", count: datos.filter(r => !r.show).length },
     { tag: "✅ Cerrado exitosamente", count: datos.filter(r => r.closed).length },
   ].sort((a, b) => b.count - a.count);
+  const patternDenominator = Math.max(datos.length, 1);
 
   const recapMeses = meses.map(m => {
     const rows = datos.filter(r => r.mes === m);
@@ -805,6 +790,12 @@ function PaginaAnalytics({ datos, cfg }) {
         ))}
       </div>
 
+      {!datos.length && (
+        <div className="glass" style={{ padding: "18px 22px", marginBottom: 24, color: "var(--muted)", fontSize: 14 }}>
+          No hay ventas cargadas todavía. Analytics sigue visible con métricas en cero.
+        </div>
+      )}
+
       {/* TAB 1 */}
       {tab === 0 && (
         <div>
@@ -813,6 +804,11 @@ function PaginaAnalytics({ datos, cfg }) {
             <table className="tbl">
               <thead><tr><th>#</th><th>Closer</th><th>Tasa Cierre</th><th>Ticket Prom.</th><th>Ingresos</th><th>Cobrado</th><th>Shows</th><th>Cerrados</th></tr></thead>
               <tbody>
+                {closerStats.length === 0 && (
+                  <tr>
+                    <td colSpan={8} style={{ color: "var(--muted)", textAlign: "center", padding: "18px 14px" }}>Sin datos todavía</td>
+                  </tr>
+                )}
                 {closerStats.map((c, i) => (
                   <tr key={c.nombre}>
                     <td style={{ fontWeight: 800, color: i === 0 ? "#ffc107" : "var(--muted)" }}>{i === 0 ? "🥇" : i + 1}</td>
@@ -836,6 +832,11 @@ function PaginaAnalytics({ datos, cfg }) {
                 <table className="tbl">
                   <thead><tr><th>#</th><th>Setter</th><th>Leads</th><th>Show Rate</th><th>Ingresos</th></tr></thead>
                   <tbody>
+                    {setterStats.length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ color: "var(--muted)", textAlign: "center", padding: "18px 14px" }}>Sin datos todavía</td>
+                      </tr>
+                    )}
                     {setterStats.map((s, i) => (
                       <tr key={s.nombre}>
                         <td style={{ fontWeight: 800, color: i === 0 ? "#ffc107" : "var(--muted)" }}>{i === 0 ? "🥇" : i + 1}</td>
@@ -854,13 +855,14 @@ function PaginaAnalytics({ datos, cfg }) {
               <div className="glass" style={{ padding: "20px 24px" }}>
                 <ResponsiveContainer width="100%" height={180}>
                   <PieChart>
-                    <Pie data={fuenteData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" paddingAngle={3}>
-                      {fuenteData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                    <Pie data={fuenteChartData} cx="50%" cy="50%" innerRadius={50} outerRadius={80} dataKey="value" paddingAngle={3}>
+                      {fuenteChartData.map((_, i) => <Cell key={i} fill={fuenteData.length ? COLORS[i % COLORS.length] : "rgba(255,255,255,0.18)"} />)}
                     </Pie>
                     <Tooltip formatter={(v, n) => [v, n]} contentStyle={{ background: "#1a1d2e", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontFamily: "'DM Sans',sans-serif" }} />
                   </PieChart>
                 </ResponsiveContainer>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                  {fuenteData.length === 0 && <span style={{ fontSize: 12, color: "var(--muted)" }}>Sin datos todavía</span>}
                   {fuenteData.map((f, i) => (
                     <span key={f.name} style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 5, color: "var(--muted)" }}>
                       <span style={{ width: 8, height: 8, borderRadius: "50%", background: COLORS[i % COLORS.length], display: "inline-block" }} />
@@ -963,7 +965,7 @@ function PaginaAnalytics({ datos, cfg }) {
                   <span style={{ fontSize: 13 }}>{p.tag}</span>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div style={{ width: 80, height: 6, borderRadius: 999, background: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${(p.count / datos.length) * 100}%`, background: "linear-gradient(90deg,#e53935,#ff6f00)", borderRadius: 999 }} />
+                      <div style={{ height: "100%", width: `${(p.count / patternDenominator) * 100}%`, background: "linear-gradient(90deg,#e53935,#ff6f00)", borderRadius: 999 }} />
                     </div>
                     <span style={{ fontSize: 12, color: "var(--muted)", minWidth: 24, textAlign: "right" }}>{p.count}</span>
                   </div>
